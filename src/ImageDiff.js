@@ -198,6 +198,12 @@ export default class ImageDiff {
     this.#backgroundTexture ??= this.#createTexture(gl, this.backgroundSource)
     this.#overlayTexture ??= this.#createTexture(gl, this.overlaySource)
 
+    gl.bindTexture(gl.TEXTURE_2D, this.#backgroundTexture)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.backgroundSource)
+
+    gl.bindTexture(gl.TEXTURE_2D, this.#overlayTexture)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.overlaySource)
+
     // Set up vertex attributes
     this.#setupAttribute(gl, 'a_position', this.#positionBuffer, 2)
     this.#setupAttribute(gl, 'a_texCoord', this.#texCoordBuffer, 2)
