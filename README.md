@@ -21,6 +21,8 @@ import ImageDiff from "@rolemodel/image-diff"
 
 const originalImage = document.getElementById('base-image')
 const newImage = document.getElementById('new-image')
+const outputCanvas = document.getElementById('output-canvas')
+const outputContext = outputCanvas.getContext('2d')
 const imageDiff = new ImageDiff(originalImage, newImage)
 
 const result = imageDiff.update({
@@ -29,8 +31,8 @@ const result = imageDiff.update({
   backgroundAlpha: 1.0
 })
 
-// result is a canvas element
-document.body.appendChild(result)
+// result is an offscreen canvas
+outputContext.drawImage(result, 0, 0)
 
 imageDiff.dispose()
 ```
