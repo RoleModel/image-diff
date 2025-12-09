@@ -39,6 +39,8 @@ Calling `update()` again will re-render the diff. Make sure to call `dispose()` 
 
 ## Acknowledgments
 
-**image-diff** is [MIT-licensed](LICENSE), open-source software from [RoleModel Software][https://rolemodelsoftware.com/]. It was initially based on [pixelmatch](https://github.com/mapbox/pixelmatch), using a similar algorithm ported to WebGL.
+**image-diff** is [MIT-licensed](LICENSE), open-source software from [RoleModel Software][rms]. It was initially based on [pixelmatch](https://github.com/mapbox/pixelmatch), using a similar algorithm ported to WebGL.
 
 [RoleModel Software][rms] is a world-class, collaborative software development team dedicated to delivering the highest quality custom web and mobile software solutions while cultivating a work environment where community, family, learning, and mentoring flourish.
+
+[rms]: https://rolemodelsoftware.com/
