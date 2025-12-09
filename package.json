@@ -1,6 +1,6 @@
 {
   "name": "@rolemodel/image-diff",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "Image Difference tool that compares pixel by pixel",
   "packageManager": "yarn@4.12.0",
   "type": "module",
