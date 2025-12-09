@@ -1,31 +1,47 @@
 export default class ImageDiff {
-  constructor() {
-    this._glContext = null
-    this._program = null
-    this._diffCanvas = null
-    this._positionBuffer = null
-    this._texCoordBuffer = null
+  #glContext = null
+  #program = null
+  #diffCanvas = null
+  #positionBuffer = null
+  #texCoordBuffer = null
+  #backgroundTexture = null
+  #overlayTexture = null
+  #vertexShader = null
+  #fragmentShader = null
+
+  /**
+   * @param {TexImageSource} backgroundSource
+   * @param {TexImageSource} overlaySource
+  */
+  constructor(backgroundSource, overlaySource) {
+    this.backgroundSource = backgroundSource
+    this.overlaySource = overlaySource
   }
 
-  _initWebGL(width, height) {
-    if (!this._diffCanvas || this._diffCanvas.width !== width || this._diffCanvas.height !== height) {
-      this._diffCanvas = document.createElement('canvas')
-      this._diffCanvas.width = width
-      this._diffCanvas.height = height
-      this._glContext = this._diffCanvas.getContext('webgl', { premultipliedAlpha: false })
+  #initWebGL(width, height) {
+    if (!this.#diffCanvas) {
+      this.#diffCanvas = new OffscreenCanvas(width, height)
+      this.#glContext = this.#diffCanvas.getContext('webgl', { premultipliedAlpha: false })
 
-      if (!this._glContext) {
+      if (!this.#glContext) {
         console.warn('WebGL not available, falling back to simple overlay')
         return null
       }
 
-      this._setupWebGLProgram()
+      this.#setupWebGLProgram()
     }
-    return this._glContext
+
+    if (this.#diffCanvas.width !== width || this.#diffCanvas.height !== height) {
+      this.#diffCanvas.width = width
+      this.#diffCanvas.height = height
+      this.#glContext.viewport(0, 0, width, height)
+    }
+
+    return this.#glContext
   }
 
-  _setupWebGLProgram() {
-    const gl = this._glContext
+  #setupWebGLProgram() {
+    const gl = this.#glContext
 
     const vertexShaderSource = `
       attribute vec2 a_position;
@@ -74,19 +90,19 @@ export default class ImageDiff {
             // Show original color from image1 with alpha blending
           gl_FragColor = vec4(color1.rgb, color1.a * u_alpha);
           }
-          }
-          `
+        }
+        `
 
-    const vertexShader = this._createShader(gl, gl.VERTEX_SHADER, vertexShaderSource)
-    const fragmentShader = this._createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource)
+    this.#vertexShader = this.#createShader(gl, gl.VERTEX_SHADER, vertexShaderSource)
+    this.#fragmentShader = this.#createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource)
 
-    this._program = gl.createProgram()
-    gl.attachShader(this._program, vertexShader)
-    gl.attachShader(this._program, fragmentShader)
-    gl.linkProgram(this._program)
+    this.#program = gl.createProgram()
+    gl.attachShader(this.#program, this.#vertexShader)
+    gl.attachShader(this.#program, this.#fragmentShader)
+    gl.linkProgram(this.#program)
 
-    if (!gl.getProgramParameter(this._program, gl.LINK_STATUS)) {
-      console.error('WebGL program link error:', gl.getProgramInfoLog(this._program))
+    if (!gl.getProgramParameter(this.#program, gl.LINK_STATUS)) {
+      console.error('WebGL program link error:', gl.getProgramInfoLog(this.#program))
       return
     }
 
@@ -101,16 +117,16 @@ export default class ImageDiff {
       0, 0, 1, 1, 1, 0,
     ])
 
-    this._positionBuffer = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, this._positionBuffer)
+    this.#positionBuffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.#positionBuffer)
     gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW)
 
-    this._texCoordBuffer = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, this._texCoordBuffer)
+    this.#texCoordBuffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.#texCoordBuffer)
     gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW)
   }
 
-  _createShader(gl, type, source) {
+  #createShader(gl, type, source) {
     const shader = gl.createShader(type)
     gl.shaderSource(shader, source)
     gl.compileShader(shader)
@@ -124,22 +140,35 @@ export default class ImageDiff {
     return shader
   }
 
-  _setupAttribute(gl, name, buffer, size) {
-    const location = gl.getAttribLocation(this._program, name)
+  #setupAttribute(gl, name, buffer, size) {
+    const location = gl.getAttribLocation(this.#program, name)
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
     gl.enableVertexAttribArray(location)
     gl.vertexAttribPointer(location, size, gl.FLOAT, false, 0, 0)
   }
 
-  _setupUniforms(gl) {
-    gl.uniform1i(gl.getUniformLocation(this._program, 'u_image1'), 0)
-    gl.uniform1i(gl.getUniformLocation(this._program, 'u_image2'), 1)
-    gl.uniform1f(gl.getUniformLocation(this._program, 'u_threshold'), 0.2)
-    gl.uniform1f(gl.getUniformLocation(this._program, 'u_alpha'), this.model().overlayOpacity() ?? 1.0)
-    gl.uniform3f(gl.getUniformLocation(this._program, 'u_diffColor'), this._diffColor.r, this._diffColor.g, this._diffColor.b)
+  #setupUniforms(gl, options = {}) {
+    const {
+      diffThreshold = 0.2,
+      backgroundAlpha = 1.0,
+      diffColor = { r: 1, g: 0, b: 0 }
+    } = options
+
+    gl.uniform1i(gl.getUniformLocation(this.#program, 'u_image1'), 0)
+    gl.uniform1i(gl.getUniformLocation(this.#program, 'u_image2'), 1)
+    gl.uniform1f(gl.getUniformLocation(this.#program, 'u_threshold'), diffThreshold)
+    gl.uniform1f(gl.getUniformLocation(this.#program, 'u_alpha'), backgroundAlpha)
+    gl.uniform3f(gl.getUniformLocation(this.#program, 'u_diffColor'), diffColor.r, diffColor.g, diffColor.b)
   }
 
-  _createTexture(gl, canvas) {
+  /**
+   *
+   * @param {WebGLRenderingContext} gl
+   * @param {Canvas} canvas
+   * @returns
+   */
+
+  #createTexture(gl, canvas) {
     const texture = gl.createTexture()
     gl.bindTexture(gl.TEXTURE_2D, texture)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
@@ -150,68 +179,36 @@ export default class ImageDiff {
     return texture
   }
 
-  _create2DContext(width, height) {
-    const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
-    return canvas.getContext('2d')
-  }
-
-  _drawToContext(context, figure, transform, options) {
-    context.resetTransform()
-    context.clearRect(0, 0, context.canvas.width, context.canvas.height)
-    context.setTransform(transform)
-    figure.draw(context, { ...options, opacity: 1 })
-  }
-
   /**
-   * @param {CanvasRenderingContext2D} context
-   * @param {Figure} backgroundFigure
-   * @param {Figure} overlayFigure
    * @param {Object} options
-   * @param {number} [options.overlayOpacity=1.0]
    * @param {Object} [options.diffColor={r:1,g:0,b:0}] - RGB color for highlighting differences (values between 0 and 1)
    * @param {number} [options.diffThreshold=0.2] - Threshold for detecting differences (0 to 1)
    * @param {number} [options.backgroundAlpha=1.0] - Opacity for the background image (0 to 1)
-   * @returns {void}
+   * @returns {OffscreenCanvas} - Canvas with the diff result
   */
+  update(options) {
+    const width = Math.max(this.backgroundSource.width, this.overlaySource.width)
+    const height = Math.max(this.backgroundSource.height, this.overlaySource.height)
 
-  perform(context, backgroundFigure, overlayFigure, options = {}) {
-    const { width, height } = context.canvas
-    const transform = context.getTransform()
+    const gl = this.#initWebGL(width, height)
 
-    this.activePageContext ??= this._create2DContext(width, height)
-    this.overlayPageContext ??= this._create2DContext(width, height)
-
-    // Draw both images to temporary canvases
-    this._drawToContext(this.activePageContext, backgroundFigure, transform, options)
-    this._drawToContext(this.overlayPageContext, overlayFigure, transform, options)
-
-    const gl = this._initWebGL(width, height)
-
-    if (!gl) {
-      // Fallback to simple overlay if WebGL unavailable
-      this._drawOverlay(context, options)
-      return
-    }
-
-    gl.useProgram(this._program)
+    gl.useProgram(this.#program)
 
     // Create textures from the canvas images
-    const texture1 = this._createTexture(gl, this.activePageContext.canvas)
-    const texture2 = this._createTexture(gl, this.overlayPageContext.canvas)
+    this.#backgroundTexture ??= this.#createTexture(gl, this.backgroundSource)
+    this.#overlayTexture ??= this.#createTexture(gl, this.overlaySource)
 
     // Set up vertex attributes
-    this._setupAttribute(gl, 'a_position', this._positionBuffer, 2)
-    this._setupAttribute(gl, 'a_texCoord', this._texCoordBuffer, 2)
+    this.#setupAttribute(gl, 'a_position', this.#positionBuffer, 2)
+    this.#setupAttribute(gl, 'a_texCoord', this.#texCoordBuffer, 2)
 
     // Set up uniforms
-    this._setupUniforms(gl)
+    this.#setupUniforms(gl, options)
 
     gl.activeTexture(gl.TEXTURE0)
-    gl.bindTexture(gl.TEXTURE_2D, texture1)
+    gl.bindTexture(gl.TEXTURE_2D, this.#backgroundTexture)
     gl.activeTexture(gl.TEXTURE1)
-    gl.bindTexture(gl.TEXTURE_2D, texture2)
+    gl.bindTexture(gl.TEXTURE_2D, this.#overlayTexture)
 
     // Render the diff
     gl.viewport(0, 0, width, height)
@@ -219,14 +216,33 @@ export default class ImageDiff {
     gl.clear(gl.COLOR_BUFFER_BIT)
     gl.drawArrays(gl.TRIANGLES, 0, 6)
 
-    // Copy result to main canvas
-    context.save()
-    context.resetTransform()
-    context.drawImage(this._diffCanvas, 0, 0)
-    context.restore()
+    return this.#diffCanvas
+  }
+
+  dispose() {
+    const gl = this.#glContext
+    if (!gl) return
 
     // Clean up textures
-    gl.deleteTexture(texture1)
-    gl.deleteTexture(texture2)
+    gl.deleteTexture(this.#backgroundTexture)
+    gl.deleteTexture(this.#overlayTexture)
+    // Clean up program
+    gl.deleteProgram(this.#program)
+    // Clean up buffers
+    gl.deleteBuffer(this.#positionBuffer)
+    gl.deleteBuffer(this.#texCoordBuffer)
+    // Clean up shaders
+    gl.deleteShader(this.#vertexShader)
+    gl.deleteShader(this.#fragmentShader)
+    // Clear the canvas
+    this.#diffCanvas.width = 0
+    this.#diffCanvas.height = 0
+    gl.viewport(0, 0, 0, 0)
+    // Reset references
+    this.#glContext = null
+    this.#program = null
+    this.#diffCanvas = null
+    this.#positionBuffer = null
+    this.#texCoordBuffer = null
   }
 }
