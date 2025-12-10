@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@rolemodel/image-diff Demo</title>
+    <style>
+      body {
+        width: 400px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      canvas {
+        border: 1px solid #000000;
+        cursor: crosshair;
+      }
+
+      .canvas-label {
+        font-weight: bold;
+        margin-bottom: 8px;
+      }
+
+      .canvas-options {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+
+        margin-bottom: 8px;
+      }
+    </style>
+</head>
+<body>
+  <div class="canvas-option">
+    <label for="drawing-color">Drawing Color:</label>
+    <input type="color" id="drawing-color" value="#ff0000">
+  </div>
+
+  <div class="canvas-wrapper">
+    <div><span class="canvas-label">Original</span></div>
+    <canvas id="original"></canvas>
+  </div>
+
+  <div class="canvas-wrapper">
+    <div>
+      <span class="canvas-label">Modified</span>
+      <div class="canvas-options">
+        <button type="button" id="copy" class="copy-button">Copy from original</button>
+      </div>
+    </div>
+    <canvas id="modified"></canvas>
+  </div>
+
+  <div class="canvas-wrapper">
+    <div>
+      <span class="canvas-label">Result</span>
+      <div class="canvas-options">
+        <div class="canvas-option">
+          <label for="diff-threshold">Diff Threshold:</label>
+          <input type="range" id="diff-threshold" min="0" max="1" step="0.01" value="0.2">
+        </div>
+
+        <div class="canvas-option">
+          <label for="background-alpha">Background Alpha:</label>
+          <input type="range" id="background-alpha" min="0" max="1" step="0.01" value="1.0">
+        </div>
+
+        <div class="canvas-option">
+          <label for="diff-color">Diff Color:</label>
+          <input type="color" id="diff-color" value="#ff0000">
+        </div>
+      </div>
+    </div>
+    <canvas id="result"></canvas>
+  </div>
+
+  <script type="module">
+    import ImageDiff from './src/ImageDiff.js'
+
+    const originalCanvas = document.getElementById('original')
+    const originalContext = originalCanvas.getContext('2d')
+    const modifiedCanvas = document.getElementById('modified')
+    const modifiedContext = modifiedCanvas.getContext('2d')
+    const resultCanvas = document.getElementById('result')
+    const resultContext = resultCanvas.getContext('2d')
+
+    const copyButton = document.getElementById('copy')
+    const drawingColorInput = document.getElementById('drawing-color')
+
+    const diffThresholdInput = document.getElementById('diff-threshold')
+    const backgroundAlphaInput = document.getElementById('background-alpha')
+    const diffColorInput = document.getElementById('diff-color')
+
+    const diff = new ImageDiff(originalCanvas, modifiedCanvas)
+
+    function diffOptions() {
+      const hexColor = diffColorInput.value
+      const r = parseInt(hexColor.slice(1, 3), 16) / 255
+      const g = parseInt(hexColor.slice(3, 5), 16) / 255
+      const b = parseInt(hexColor.slice(5, 7), 16) / 255
+
+      return {
+        diffColor: { r, g, b },
+        threshold: parseFloat(diffThresholdInput.value),
+        backgroundAlpha: parseFloat(backgroundAlphaInput.value)
+      }
+    }
+
+    function updateDiff() {
+      const diffCanvas = diff.update(diffOptions())
+
+      resultContext.clearRect(0, 0, resultCanvas.width, resultCanvas.height)
+      resultContext.drawImage(diffCanvas, 0, 0)
+    }
+
+    function addCanvasEventListeners(canvasContext) {
+      canvasContext.canvas.addEventListener('pointermove', event => {
+        if (event.buttons !== 1) return
+        const rect = canvasContext.canvas.getBoundingClientRect()
+        const x = event.clientX - rect.left
+        const y = event.clientY - rect.top
+        const ctx = canvasContext
+        ctx.fillStyle = drawingColorInput.value
+        ctx.fillRect(x - 5, y - 5, 10, 10)
+        updateDiff()
+      })
+    }
+
+    addCanvasEventListeners(originalContext)
+    addCanvasEventListeners(modifiedContext)
+
+    copyButton.addEventListener('click', () => {
+      modifiedContext.clearRect(0, 0, modifiedCanvas.width, modifiedCanvas.height)
+      modifiedContext.drawImage(originalCanvas, 0, 0)
+      updateDiff()
+    })
+
+    diffThresholdInput.addEventListener('input', updateDiff)
+    backgroundAlphaInput.addEventListener('input', updateDiff)
+    diffColorInput.addEventListener('input', updateDiff)
+  </script>
+</body>
+</html>
