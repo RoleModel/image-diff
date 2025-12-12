@@ -88,19 +88,12 @@ export default class ImageDiff {
           // Determine if this is an addition or deletion
           float brightness1 = (y1 + color1.a) / 2.0;
           float brightness2 = (y2 + color2.a) / 2.0;
-          
+
           if (brightness2 > brightness1) {
             // Addition: overlay has content, background doesn't
             gl_FragColor = vec4(u_additionColor, 1.0);
           } else {
-            // Deletion: background has content, overlay doesn't
-            // Only show if overlay alpha is high enough, otherwise hide
-            if (u_alpha > 0.5) {
-              gl_FragColor = vec4(u_deletionColor, 1.0);
-            } else {
-              // Hide deletions when overlay is hidden
-              gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
-            }
+            gl_FragColor = vec4(u_deletionColor, u_alpha);
           }
         } else {
           // Blend overlay on top of background - alpha only affects overlay
