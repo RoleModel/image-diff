@@ -60,7 +60,8 @@ export default class ImageDiff {
       uniform sampler2D u_image2;
       uniform float u_threshold;
       uniform float u_alpha;
-      uniform vec3 u_diffColor;
+      uniform vec3 u_additionColor;
+      uniform vec3 u_deletionColor;
       varying vec2 v_texCoord;
 
       void main() {
@@ -84,14 +85,27 @@ export default class ImageDiff {
 
         // Check if difference exceeds threshold
         if (delta > u_threshold || alphaDiff > u_threshold) {
-          // Highlight differences with custom color
-          gl_FragColor = vec4(u_diffColor, 1.0);
+          // Determine if this is an addition or deletion
+          float brightness1 = (y1 + color1.a) / 2.0;
+          float brightness2 = (y2 + color2.a) / 2.0;
+
+          if (brightness2 > brightness1) {
+            // Addition: overlay has content, background doesn't
+            gl_FragColor = vec4(u_additionColor, 1.0 - u_alpha);
           } else {
-            // Show original color from image1 with alpha blending
-          gl_FragColor = vec4(color1.rgb, color1.a * u_alpha);
+            // Deletion: background has content, overlay doesn't
+            gl_FragColor = vec4(u_deletionColor, u_alpha);
           }
+        } else {
+          // Blend overlay on top of background - alpha only affects overlay
+          // Preserve background alpha, blend overlay based on u_alpha
+          float overlayFactor = color2.a * u_alpha;
+          vec3 blended = mix(color1.rgb, color2.rgb, overlayFactor);
+          float finalAlpha = max(color1.a, overlayFactor);
+          gl_FragColor = vec4(blended, finalAlpha);
         }
-        `
+      }
+      `
 
     this.#vertexShader = this.#createShader(gl, gl.VERTEX_SHADER, vertexShaderSource)
     this.#fragmentShader = this.#createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource)
@@ -151,14 +165,16 @@ export default class ImageDiff {
     const {
       diffThreshold = 0.2,
       backgroundAlpha = 1.0,
-      diffColor = { r: 1, g: 0, b: 0 }
+      additionColor = { r: 1, g: 0, b: 0 },
+      deletionColor = { r: 1, g: 1, b: 0 }
     } = options
 
     gl.uniform1i(gl.getUniformLocation(this.#program, 'u_image1'), 0)
     gl.uniform1i(gl.getUniformLocation(this.#program, 'u_image2'), 1)
     gl.uniform1f(gl.getUniformLocation(this.#program, 'u_threshold'), diffThreshold)
     gl.uniform1f(gl.getUniformLocation(this.#program, 'u_alpha'), backgroundAlpha)
-    gl.uniform3f(gl.getUniformLocation(this.#program, 'u_diffColor'), diffColor.r, diffColor.g, diffColor.b)
+    gl.uniform3f(gl.getUniformLocation(this.#program, 'u_additionColor'), additionColor.r, additionColor.g, additionColor.b)
+    gl.uniform3f(gl.getUniformLocation(this.#program, 'u_deletionColor'), deletionColor.r, deletionColor.g, deletionColor.b)
   }
 
   /**
@@ -181,9 +197,10 @@ export default class ImageDiff {
 
   /**
    * @param {Object} options
-   * @param {Object} [options.diffColor={r:1,g:0,b:0}] - RGB color for highlighting differences (values between 0 and 1)
+   * @param {Object} [options.additionColor={r:1,g:0,b:0}] - RGB color for highlighting additions (values between 0 and 1)
+   * @param {Object} [options.deletionColor={r:1,g:1,b:0}] - RGB color for highlighting deletions (values between 0 and 1)
    * @param {number} [options.diffThreshold=0.2] - Threshold for detecting differences (0 to 1)
-   * @param {number} [options.backgroundAlpha=1.0] - Opacity for the background image (0 to 1)
+   * @param {number} [options.backgroundAlpha=1.0] - Opacity for the overlay image (0 to 1, does not affect background)
    * @returns {OffscreenCanvas} - Canvas with the diff result
   */
   update(options) {
