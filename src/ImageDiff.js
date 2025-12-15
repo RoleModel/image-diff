@@ -91,8 +91,13 @@ export default class ImageDiff {
 
           if (brightness2 > brightness1) {
             // Addition: overlay has content, background doesn't
-            gl_FragColor = vec4(u_additionColor, 1.0);
+            if (u_alpha < 1.0) {
+              gl_FragColor = vec4(u_additionColor, 1.0 - u_alpha);
+            } else {
+              gl_FragColor = vec4(u_additionColor, 0.0);
+            }
           } else {
+            // Deletion: background has content, overlay doesn't
             gl_FragColor = vec4(u_deletionColor, u_alpha);
           }
         } else {
